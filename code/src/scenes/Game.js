@@ -21,28 +21,64 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
-    var _this = this;
     this.graphics = this.add.graphics({
-      lineStyle: { color: 0xff0000 },
-      fillStyle: { color: 0x00ff00 },
+      lineStyle: { color: 0x538de6 },
+      fillStyle: { color: 0x538de6 },
     });
 
-    this.player = new Phaser.Geom.Triangle(10, 0, 0, 40, 20, 40);
-    this.player.height = this.player.bottom - this.player.top;
-    this.player.width = this.player.right - this.player.left;
-    Phaser.Geom.Triangle.CenterOn(
-      this.player,
+    this.player = this.physics.add.sprite(
       this.game.config.width / 2,
-      this.game.config.height - this.player.height / 2
+      this.game.config.height - 50,
+      'blueCar'
     );
-    console.log(this.player.height);
-    this.graphics.clear();
-    this.graphics.fillTriangleShape(this.player);
+    this.player.setCollideWorldBounds(true);
+    this.player.setScale(0.035);
+    this.player.setAngle(-90);
+    this.player.setVelocity(0, 0);
+    this.base = new Phaser.Curves.Path(this.player.x + 50, this.player.y);
+    this.base.circleTo(50);
+    this.base.draw(this.graphics);
+    this.base.moveTo(this.player.x, this.player.y);
+    this.base.lastUpdate = 0;
   }
 
   update(time, delta) {
-    if (this.cursors.up.isDown) {
-      Phaser.Geom.Triangle.CenterOn(this.player, this.player.)
+    let speed = 300;
+    let rotation = 3;
+    let newAngle = this.player.angle;
+    if (
+      !Phaser.Geom.Point.Equals(
+        this.player.body.velocity,
+        new Phaser.Geom.Point(0, 0)
+      )
+    ) {
+      if (this.cursors.right.isDown) {
+        newAngle += rotation;
+      }
+      if (this.cursors.left.isDown) {
+        newAngle -= rotation;
+      }
+    }
+    this.player.setAngle(newAngle);
+    this.player.setVelocity(
+      speed * Math.cos((this.player.angle * Math.PI) / 180),
+      speed * Math.sin((this.player.angle * Math.PI) / 180)
+    );
+    if (
+      time - this.base.lastUpdate > 50 &&
+      (Math.abs(
+        this.player.x - this.base.curves[this.base.curves.length - 1].p0.x
+      ) > 150 ||
+        Math.abs(
+          this.player.y - this.base.curves[this.base.curves.length - 1].p0.y
+        ) > 150)
+    ) {
+      this.base.lastUpdate = time;
+      let path = new Phaser.Curves.Path(this.player.x, this.player.y);
+      path.lineTo(this.base.)
+      this.base.add(new Phaser.Curves.Path())
+      this.base.draw(this.graphics);
+      console.log(this.base.curves);
     }
   }
 
