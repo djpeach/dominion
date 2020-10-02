@@ -1,4 +1,5 @@
 import 'phaser';
+import { union } from 'martinez-polygon-clipping';
 
 export default class GameScene extends Phaser.Scene {
   constructor(key) {
@@ -35,14 +36,23 @@ export default class GameScene extends Phaser.Scene {
     this.player.setScale(0.035);
     this.player.setAngle(-90);
     this.player.setVelocity(0, 0);
-    this.base = new Phaser.Curves.Path(this.player.x + 50, this.player.y);
-    this.base.circleTo(50);
-    this.base.draw(this.graphics);
-    this.base.moveTo(this.player.x, this.player.y);
-    this.base.lastUpdate = 0;
+    this.base = new Phaser.Geom.Polygon();
+    let baseRadius = 50;
+    for (let i = 0; i < 360; i++) {
+      let point = new Phaser.Geom.Point(
+        this.player.x + baseRadius * Math.cos((i * Math.PI) / 180),
+        this.player.y + baseRadius * Math.sin((i * Math.PI) / 180)
+      );
+      this.base.points.push(point);
+    }
+    this.graphics.fillPoints(this.base.points);
+    this.baseExpansion = new Phaser.Geom.Polygon();
+    this.baseExpansion.lastUpdate = 0;
+    this.player.exploring = false;
   }
 
   update(time, delta) {
+    console.log(this.player.body.bottom);
     let speed = 300;
     let rotation = 3;
     let newAngle = this.player.angle;
@@ -50,7 +60,8 @@ export default class GameScene extends Phaser.Scene {
       !Phaser.Geom.Point.Equals(
         this.player.body.velocity,
         new Phaser.Geom.Point(0, 0)
-      )
+      ) ||
+      true
     ) {
       if (this.cursors.right.isDown) {
         newAngle += rotation;
@@ -60,25 +71,55 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     this.player.setAngle(newAngle);
-    this.player.setVelocity(
-      speed * Math.cos((this.player.angle * Math.PI) / 180),
-      speed * Math.sin((this.player.angle * Math.PI) / 180)
+    if (this.cursors.up.isDown) {
+      this.player.setVelocity(
+        speed * Math.cos((this.player.angle * Math.PI) / 180),
+        speed * Math.sin((this.player.angle * Math.PI) / 180)
+      );
+    } else {
+      this.player.setVelocity(0, 0);
+    }
+    let inBase = !!Phaser.Geom.Polygon.ContainsPoint(
+      this.base,
+      new Phaser.Geom.Point(this.player.x, this.player.y)
     );
-    if (
-      time - this.base.lastUpdate > 50 &&
-      (Math.abs(
-        this.player.x - this.base.curves[this.base.curves.length - 1].p0.x
-      ) > 150 ||
-        Math.abs(
-          this.player.y - this.base.curves[this.base.curves.length - 1].p0.y
-        ) > 150)
+    if (!this.exploring && !inBase) {
+      console.log('leaving base');
+      this.exploring = true;
+      this.baseExpansion.points.push(
+        new Phaser.Geom.Point(this.player.x, this.player.body.bottom)
+      );
+    } else if (
+      this.exploring &&
+      !inBase &&
+      time - this.baseExpansion.lastUpdate > 60
     ) {
-      this.base.lastUpdate = time;
-      let path = new Phaser.Curves.Path(this.player.x, this.player.y);
-      path.lineTo(this.base.)
-      this.base.add(new Phaser.Curves.Path())
-      this.base.draw(this.graphics);
-      console.log(this.base.curves);
+      console.log('exploring');
+      this.baseExpansion.points.push(
+        new Phaser.Geom.Point(this.player.x, this.player.y)
+      );
+      this.graphics.strokePoints(this.baseExpansion.points);
+      this.baseExpansion.lastUpdate = time;
+    } else if (this.exploring && inBase) {
+      console.log('returning back to base');
+      this.exploring = false;
+      this.baseExpansion.points.push(
+        new Phaser.Geom.Point(this.player.x, this.player.y)
+      );
+      // Phaser.Geom.Polygon.Smooth(this.baseExpansion);
+      this.baseGeometry = [
+        [this.base.points.map((point) => [point.x, point.y])],
+      ];
+      this.baseExpansionGeometry = [
+        [this.baseExpansion.points.map((point) => [point.x, point.y])],
+      ];
+      let newBaseGeometry = union(
+        this.baseGeometry,
+        this.baseExpansionGeometry
+      )[0][0];
+      this.base.setTo(newBaseGeometry);
+      this.baseExpansion.setTo([]);
+      this.graphics.fillPoints(this.base.points);
     }
   }
 
