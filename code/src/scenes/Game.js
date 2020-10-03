@@ -1,5 +1,6 @@
 import 'phaser';
-import { union } from 'martinez-polygon-clipping';
+import { xor, union } from 'martinez-polygon-clipping';
+import Car from '../containers/Car';
 
 export default class GameScene extends Phaser.Scene {
   constructor(key) {
@@ -23,21 +24,24 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.graphics = this.add.graphics({
-      lineStyle: { color: 0x538de6 },
+      lineStyle: { color: 0xff0000 },
       fillStyle: { color: 0x538de6 },
     });
 
-    this.player = this.physics.add.sprite(
-      this.game.config.width / 2,
-      this.game.config.height - 50,
-      'blueCar'
-    );
-    this.player.setCollideWorldBounds(true);
-    this.player.setScale(0.035);
+    // this.player = this.physics.add.sprite(
+    //   this.game.config.width / 2,
+    //   this.game.config.height - 50,
+    //   'blueCar'
+    // );
+    this.player = new Car(this, this.game.config.width/ 2, this.game.config.height / 2, {
+      imageKey: 'blueCar',
+    });
+    // this.player.setCollideWorldBounds(true);
+    this.player.setScale(0.06);
     this.player.setAngle(-90);
-    this.player.setVelocity(0, 0);
+    this.player.body.setVelocity(0, 0);
     this.base = new Phaser.Geom.Polygon();
-    let baseRadius = 50;
+    let baseRadius = 200;
     for (let i = 0; i < 360; i++) {
       let point = new Phaser.Geom.Point(
         this.player.x + baseRadius * Math.cos((i * Math.PI) / 180),
@@ -45,39 +49,40 @@ export default class GameScene extends Phaser.Scene {
       );
       this.base.points.push(point);
     }
-    this.graphics.fillPoints(this.base.points);
+    // this.graphics.fillPoints(this.base.points);
+    this.graphics.strokePoints(this.base.points);
     this.baseExpansion = new Phaser.Geom.Polygon();
     this.baseExpansion.lastUpdate = 0;
     this.player.exploring = false;
+    this.baseExpansionLineDrawer = new Phaser.Geom.Polygon();
+    this.base.exitPoint = new Phaser.Geom.Point(0, 0);
+    this.base.entryPoint = new Phaser.Geom.Point(0, 0);
+    this.text = {
+      title: this.add.text(50, 50, `Pointer:`),
+      x: this.add.text(50, 70, `X: 0`),
+      y: this.add.text(50, 90, `Y: 0`),
+      h: this.add.text(50, 110, `H: 0`)
+    }
   }
 
   update(time, delta) {
-    console.log(this.player.body.bottom);
     let speed = 300;
     let rotation = 3;
     let newAngle = this.player.angle;
-    if (
-      !Phaser.Geom.Point.Equals(
-        this.player.body.velocity,
-        new Phaser.Geom.Point(0, 0)
-      ) ||
-      true
-    ) {
-      if (this.cursors.right.isDown) {
-        newAngle += rotation;
-      }
-      if (this.cursors.left.isDown) {
-        newAngle -= rotation;
-      }
+    if (this.cursors.right.isDown) {
+      newAngle += rotation;
+    }
+    if (this.cursors.left.isDown) {
+      newAngle -= rotation;
     }
     this.player.setAngle(newAngle);
     if (this.cursors.up.isDown) {
-      this.player.setVelocity(
+      this.player.body.setVelocity(
         speed * Math.cos((this.player.angle * Math.PI) / 180),
         speed * Math.sin((this.player.angle * Math.PI) / 180)
       );
     } else {
-      this.player.setVelocity(0, 0);
+      this.player.body.setVelocity(0, 0);
     }
     let inBase = !!Phaser.Geom.Polygon.ContainsPoint(
       this.base,
@@ -86,41 +91,68 @@ export default class GameScene extends Phaser.Scene {
     if (!this.exploring && !inBase) {
       console.log('leaving base');
       this.exploring = true;
-      this.baseExpansion.points.push(
-        new Phaser.Geom.Point(this.player.x, this.player.body.bottom)
-      );
-    } else if (
-      this.exploring &&
-      !inBase &&
-      time - this.baseExpansion.lastUpdate > 60
-    ) {
+      this.base.exitPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
+      this.nearestBaseExitPoint = {
+        index: 0,
+        point: new Phaser.Geom.Point(0, 0),
+        distance: Number.MAX_SAFE_INTEGER
+      }
+      this.base.points.forEach((point, index) => {
+        let distance = Phaser.Math.Distance.Between(this.base.exitPoint.x, this.base.exitPoint.y, point.x, point.y)
+        if (distance < this.nearestBaseExitPoint.distance) {
+          this.nearestBaseExitPoint = {index, point, distance}
+        }
+      })
+      this.baseExpansion.setTo([this.nearestBaseExitPoint.point, this.base.exitPoint])
+      this.baseExpansionLineDrawer.setTo([this.nearestBaseExitPoint.point, this.base.exitPoint])
+    } else if (this.exploring && !inBase) {
       console.log('exploring');
-      this.baseExpansion.points.push(
-        new Phaser.Geom.Point(this.player.x, this.player.y)
-      );
-      this.graphics.strokePoints(this.baseExpansion.points);
-      this.baseExpansion.lastUpdate = time;
+      this.graphics.lineStyle(3, 0xff0000, .75);
+      let newPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
+      this.baseExpansion.points.push(newPoint);
+      this.baseExpansionLineDrawer.points.push(newPoint);
+      this.graphics.strokePoints(this.baseExpansionLineDrawer.points);
+      this.baseExpansionLineDrawer.setTo([newPoint]);
     } else if (this.exploring && inBase) {
+      this.graphics.clear();
+      this.graphics.strokePoints(this.base.points);
+      this.graphics.strokePoints(this.baseExpansion.points);
       console.log('returning back to base');
       this.exploring = false;
-      this.baseExpansion.points.push(
-        new Phaser.Geom.Point(this.player.x, this.player.y)
-      );
-      // Phaser.Geom.Polygon.Smooth(this.baseExpansion);
-      this.baseGeometry = [
-        [this.base.points.map((point) => [point.x, point.y])],
-      ];
-      this.baseExpansionGeometry = [
-        [this.baseExpansion.points.map((point) => [point.x, point.y])],
-      ];
-      let newBaseGeometry = union(
-        this.baseGeometry,
-        this.baseExpansionGeometry
-      )[0][0];
-      this.base.setTo(newBaseGeometry);
-      this.baseExpansion.setTo([]);
-      this.graphics.fillPoints(this.base.points);
+      this.base.entryPoint = new Phaser.Geom.Point(this.player.x, this.player.y);
+      this.nearestBaseEntryPoint = {
+        index: 0,
+        point: new Phaser.Geom.Point(0, 0),
+        distance: Number.MAX_SAFE_INTEGER
+      }
+      this.base.points.forEach((point, index) => {
+        let distance = Phaser.Math.Distance.Between(this.base.entryPoint.x, this.base.entryPoint.y, point.x, point.y)
+        if (distance < this.nearestBaseEntryPoint.distance) {
+          this.nearestBaseEntryPoint = {index, point, distance}
+        }
+      })
+      this.baseExpansion.points.push(this.nearestBaseEntryPoint.point);
+      let baseIntersections = [this.nearestBaseEntryPoint, this.nearestBaseExitPoint].sort((a, b) => {
+        if (a.point.x === b.point.x) {
+          return b.point.y - a.point.y;
+        }
+        return b.point.x > a.point.x ? 1 : -1;
+      })
+      let baseTail = this.base.points.slice(baseIntersections[0].index, this.base.points.length);
+      let baseHead = this.base.points.slice(0, baseIntersections[1].index + 1);
+      this.graphics.lineStyle(3, 0x00ff00, 1);
+      this.graphics.strokePoints(baseTail); // green tail
+      this.graphics.lineStyle(3, 0x0000ff, 1);
+      this.graphics.strokePoints(baseHead); // blue head
+      console.log(baseIntersections);
+      console.log(baseTail);
+      console.log(baseHead);
+      // this.base.setTo(this.baseExpansion.points);
     }
+    let pointer = this.input.activePointer;
+    this.text.x.setText(`X: ${pointer.x}`)
+    this.text.y.setText(`Y: ${pointer.y}`)
+    this.text.h.setText(`H: ${Math.sqrt(pointer.x*pointer.x + pointer.y*pointer.y)}`)
   }
 
   resize(gameSize, baseSize, displaySize, resolution) {
@@ -135,3 +167,26 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.resize(width, height);
   }
 }
+
+
+// resort points to start at exitPoint
+// let head = this.base.points.slice(0, first.index);
+// let tail = this.base.points.slice(first.index, this.base.points.length);
+// this.base.setTo([...tail, ...head]);
+// this.base.points.push(first.point);
+// this.graphics.clear();
+// this.graphics.lineStyle(15, 0xffffff, 0.5);
+// this.graphics.strokePoints(this.base.points);
+// this.graphics.lineStyle(3, 0x00ff00);
+// this.graphics.strokePoints(head) // green
+// this.graphics.lineStyle(3, 0x0000ff);
+// this.graphics.strokePoints(tail) // blue
+// this.graphics.lineStyle(3, 0xff0000);
+// this.graphics.strokePoints(this.baseExpansion.points);
+
+// build new path with the remaining current base and new base expansion
+// console.log(last.index - first.index);
+// let remainingBasePath = this.base.points.slice(last.index - first.index, this.base.points.length);
+// this.graphics.lineStyle(8, 0xff0000, 0.35);
+// this.graphics.strokePoints(remainingBasePath);
+// this.base.setTo([...this.baseExpansion.points, ...remainingBasePath]);
