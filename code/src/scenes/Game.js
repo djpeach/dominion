@@ -144,29 +144,26 @@ export default class GameScene extends Phaser.Scene {
       let boundingRect = new Phaser.Geom.Polygon(allUniquePoints);
       let aabb = Phaser.Geom.Polygon.GetAABB(boundingRect);
       let center = new Phaser.Geom.Point(aabb.centerX, aabb.centerY);
-      allUniquePoints = allUniquePoints.sort((a, b) => {
-        if (a.x - center.x >= 0 && b.x - center.x < 0)
-          return 1;
-        if (a.x - center.x < 0 && b.x - center.x >= 0)
-          return -1;
-        if (a.x - center.x === 0 && b.x - center.x === 0) {
-          if (a.y - center.y >= 0 || b.y - center.y >= 0)
-            return a.y > b.y ? 1 : -1;
-          return b.y > a.y ? 1 : -1;
+
+      /** Graham Scan to build convex hull: https://en.wikipedia.org/wiki/Graham_scan **/
+      // Find the lowest point
+      let lp = allUniquePoints[0];
+      allUniquePoints.forEach(point => {
+        if (point.y > lp.y) {
+          lp = point;
+        } else if (point.y === lp.y) {
+          if (point.x < lp.x) {
+            lp = point;
+          }
         }
-
-        // compute the cross product of vectors (center -> a) x (center -> b)
-        let det = (a.x - center.x) * (b.y - center.y) - (b.x - center.x) * (a.y - center.y);
-        if (det < 0)
-          return 1;
-        if (det > 0)
-          return -1;
-
-        // points a and b are on the same line from the center
-        // check which point is closer to the center
-        let d1 = (a.x - center.x) * (a.x - center.x) + (a.y - center.y) * (a.y - center.y);
-        let d2 = (b.x - center.x) * (b.x - center.x) + (b.y - center.y) * (b.y - center.y);
-        return d1 > d2 ? 1 : -1;
+      })
+      // sort by the angle points a/b and lp make with the x axis
+      allUniquePoints = allUniquePoints.sort((a, b) => {
+        let det = (a.x - lp.x) * (b.y - lp.y) - (b.x - lp.x) * (a.y - lp.y);
+        if (det === 0) {
+          // what to do if lp and a/b create same angle with x-axis?
+        }
+        return det;
       })
 
       // draw new polygon
