@@ -27,16 +27,9 @@ export default class GameScene extends Phaser.Scene {
       lineStyle: { color: 0xff0000 },
       fillStyle: { color: 0x538de6 },
     });
-
-    // this.player = this.physics.add.sprite(
-    //   this.game.config.width / 2,
-    //   this.game.config.height - 50,
-    //   'blueCar'
-    // );
     this.player = new Car(this, this.game.config.width/ 2, this.game.config.height / 2, {
       imageKey: 'blueCar',
     });
-    // this.player.setCollideWorldBounds(true);
     this.player.setScale(0.06);
     this.player.setAngle(-90);
     this.player.body.setVelocity(0, 0);
@@ -49,14 +42,11 @@ export default class GameScene extends Phaser.Scene {
       );
       this.base.points.push(point);
     }
-    // this.graphics.fillPoints(this.base.points);
+    this.base.points.push(this.base.points[0]);
     this.graphics.strokePoints(this.base.points);
     this.baseExpansion = new Phaser.Geom.Polygon();
-    this.baseExpansion.lastUpdate = 0;
     this.player.exploring = false;
     this.baseExpansionLineDrawer = new Phaser.Geom.Polygon();
-    this.base.exitPoint = new Phaser.Geom.Point(0, 0);
-    this.base.entryPoint = new Phaser.Geom.Point(0, 0);
     this.text = {
       title: this.add.text(50, 50, `Pointer:`),
       x: this.add.text(50, 70, `X: 0`),
@@ -91,20 +81,20 @@ export default class GameScene extends Phaser.Scene {
     if (!this.exploring && !inBase) {
       console.log('leaving base');
       this.exploring = true;
-      this.base.exitPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
-      this.nearestBaseExitPoint = {
+      let exitPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
+      this.baseExpansion.nearestBaseExitPoint = {
         index: 0,
         point: new Phaser.Geom.Point(0, 0),
         distance: Number.MAX_SAFE_INTEGER
       }
       this.base.points.forEach((point, index) => {
-        let distance = Phaser.Math.Distance.Between(this.base.exitPoint.x, this.base.exitPoint.y, point.x, point.y)
-        if (distance < this.nearestBaseExitPoint.distance) {
-          this.nearestBaseExitPoint = {index, point, distance}
+        let distance = Phaser.Math.Distance.Between(exitPoint.x, exitPoint.y, point.x, point.y)
+        if (distance < this.baseExpansion.nearestBaseExitPoint.distance) {
+          this.baseExpansion.nearestBaseExitPoint = {index, point, distance}
         }
       })
-      this.baseExpansion.setTo([this.nearestBaseExitPoint.point, this.base.exitPoint])
-      this.baseExpansionLineDrawer.setTo([this.nearestBaseExitPoint.point, this.base.exitPoint])
+      this.baseExpansion.setTo([this.baseExpansion.nearestBaseExitPoint.point, exitPoint])
+      this.baseExpansionLineDrawer.setTo([this.baseExpansion.nearestBaseExitPoint.point, exitPoint])
     } else if (this.exploring && !inBase) {
       console.log('exploring');
       this.graphics.lineStyle(3, 0xff0000, .75);
@@ -114,40 +104,26 @@ export default class GameScene extends Phaser.Scene {
       this.graphics.strokePoints(this.baseExpansionLineDrawer.points);
       this.baseExpansionLineDrawer.setTo([newPoint]);
     } else if (this.exploring && inBase) {
-      this.graphics.clear();
-      this.graphics.strokePoints(this.base.points);
-      this.graphics.strokePoints(this.baseExpansion.points);
       console.log('returning back to base');
       this.exploring = false;
-      this.base.entryPoint = new Phaser.Geom.Point(this.player.x, this.player.y);
-      this.nearestBaseEntryPoint = {
+
+      let entryPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
+      this.baseExpansion.nearestBaseEntryPoint = {
         index: 0,
         point: new Phaser.Geom.Point(0, 0),
         distance: Number.MAX_SAFE_INTEGER
       }
       this.base.points.forEach((point, index) => {
-        let distance = Phaser.Math.Distance.Between(this.base.entryPoint.x, this.base.entryPoint.y, point.x, point.y)
-        if (distance < this.nearestBaseEntryPoint.distance) {
-          this.nearestBaseEntryPoint = {index, point, distance}
+        let distance = Phaser.Math.Distance.Between(entryPoint.x, entryPoint.y, point.x, point.y)
+        if (distance < this.baseExpansion.nearestBaseEntryPoint.distance) {
+          this.baseExpansion.nearestBaseEntryPoint = {index, point, distance}
         }
       })
-      this.baseExpansion.points.push(this.nearestBaseEntryPoint.point);
-      let baseIntersections = [this.nearestBaseEntryPoint, this.nearestBaseExitPoint].sort((a, b) => {
-        if (a.point.x === b.point.x) {
-          return b.point.y - a.point.y;
-        }
-        return b.point.x > a.point.x ? 1 : -1;
-      })
-      let baseTail = this.base.points.slice(baseIntersections[0].index, this.base.points.length);
-      let baseHead = this.base.points.slice(0, baseIntersections[1].index + 1);
-      this.graphics.lineStyle(3, 0x00ff00, 1);
-      this.graphics.strokePoints(baseTail); // green tail
-      this.graphics.lineStyle(3, 0x0000ff, 1);
-      this.graphics.strokePoints(baseHead); // blue head
-      console.log(baseIntersections);
-      console.log(baseTail);
-      console.log(baseHead);
-      // this.base.setTo(this.baseExpansion.points);
+      this.baseExpansion.points.push(this.baseExpansion.nearestBaseEntryPoint.point);
+      this.baseExpansion.points.push(this.baseExpansion.points[0]);
+      this.graphics.clear();
+      this.graphics.strokePoints(this.base.points);
+      this.graphics.strokePoints(this.baseExpansion.points);
     }
     let pointer = this.input.activePointer;
     this.text.x.setText(`X: ${pointer.x}`)
