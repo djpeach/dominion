@@ -80,6 +80,7 @@ export default class GameScene extends Phaser.Scene {
     );
     if (!this.exploring && !inBase) {
       console.log('leaving base');
+      this.finalPolygon = null;
       this.exploring = true;
       let exitPoint = new Phaser.Geom.Point(this.player.x, this.player.y)
       this.baseExpansion.nearestBaseExitPoint = {
@@ -119,11 +120,61 @@ export default class GameScene extends Phaser.Scene {
           this.baseExpansion.nearestBaseEntryPoint = {index, point, distance}
         }
       })
+      // draw old polygons
       this.baseExpansion.points.push(this.baseExpansion.nearestBaseEntryPoint.point);
       this.baseExpansion.points.push(this.baseExpansion.points[0]);
       this.graphics.clear();
+      this.graphics.lineStyle(10, 0xffffff, .3);
       this.graphics.strokePoints(this.base.points);
       this.graphics.strokePoints(this.baseExpansion.points);
+
+      // compute outter edges
+      let outterBasePoints = this.base.points.filter(point => !Phaser.Geom.Polygon.ContainsPoint(this.baseExpansion, point));
+      let outterExpansionPoints = this.baseExpansion.points.filter(point => !Phaser.Geom.Polygon.ContainsPoint(this.base, point));
+      this.base.setTo(outterBasePoints);
+      this.baseExpansion.setTo(outterExpansionPoints);
+
+      // draw outter edges of old plygons
+      this.graphics.lineStyle(3, 0x00ff00, 1);
+      this.graphics.strokePoints(this.base.points);
+      this.graphics.strokePoints(this.baseExpansion.points);
+
+      // compute new base, sorted
+      let allUniquePoints = [...new Set([...outterBasePoints, ...outterExpansionPoints])];
+      let boundingRect = new Phaser.Geom.Polygon(allUniquePoints);
+      let aabb = Phaser.Geom.Polygon.GetAABB(boundingRect);
+      let center = new Phaser.Geom.Point(aabb.centerX, aabb.centerY);
+      allUniquePoints = allUniquePoints.sort((a, b) => {
+        if (a.x - center.x >= 0 && b.x - center.x < 0)
+          return 1;
+        if (a.x - center.x < 0 && b.x - center.x >= 0)
+          return -1;
+        if (a.x - center.x === 0 && b.x - center.x === 0) {
+          if (a.y - center.y >= 0 || b.y - center.y >= 0)
+            return a.y > b.y ? 1 : -1;
+          return b.y > a.y ? 1 : -1;
+        }
+
+        // compute the cross product of vectors (center -> a) x (center -> b)
+        let det = (a.x - center.x) * (b.y - center.y) - (b.x - center.x) * (a.y - center.y);
+        if (det < 0)
+          return 1;
+        if (det > 0)
+          return -1;
+
+        // points a and b are on the same line from the center
+        // check which point is closer to the center
+        let d1 = (a.x - center.x) * (a.x - center.x) + (a.y - center.y) * (a.y - center.y);
+        let d2 = (b.x - center.x) * (b.x - center.x) + (b.y - center.y) * (b.y - center.y);
+        return d1 > d2 ? 1 : -1;
+      })
+
+      // draw new polygon
+      this.graphics.lineStyle(2, 0xff0000, 0.7);
+      this.graphics.strokePoints(allUniquePoints);
+      this.graphics.strokeRectShape(Phaser.Geom.Polygon.GetAABB(boundingRect))
+      this.base.setTo(allUniquePoints);
+
     }
     let pointer = this.input.activePointer;
     this.text.x.setText(`X: ${pointer.x}`)
